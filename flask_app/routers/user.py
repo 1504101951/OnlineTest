@@ -2,6 +2,7 @@
 from flask import request
 from flask_restx import Namespace, Resource
 
+from flask_app import MESSAGE_DICT
 from flask_app.routers import response
 from flask_app.services import user_service
 
@@ -12,6 +13,14 @@ user = Namespace("user", path='/user', description='用户管理')
 # -------------------------------------代码--------------------------------------
 @user.route('/login')
 class Login(Resource):
+    @user.doc("获取用户信息")
+    def get(self):
+        token = request.headers.get("Authorization")
+        result = user_service.get_token_info(token)
+        if result:
+            return {"message": MESSAGE_DICT.SUCCESS, "data": result}
+        return {"message": MESSAGE_DICT.NOT_FOUND.format("用户信息"), "data": []}
+
     @user.doc("登录")
     def post(self):
         data = request.get_json()
@@ -26,12 +35,11 @@ class Login(Resource):
         token = request.headers.get('Authorization')
         data = request.get_json()
         account = data.get('account')
-        user_type = data.get('user_type')
         old_pass = data.get('old_pass')
-        passwd = data.get('passwd')
+        password = data.get('password')
         check_passwd = data.get('check_pass')
-        result = user_service.modify_pass(account, user_type, old_pass,
-                                          passwd, check_passwd, token)
+        result = user_service.modify_pass(account, old_pass,
+                                          password, check_passwd, token)
         return response(result)
 
 
@@ -58,9 +66,10 @@ class Account(Resource):
         phone = data.get('phone')
         introduce = data.get('introduce') or 'Ta的自我介绍正在路上...'
         profession = data.get('profession')
+        is_admin = data.get('is_admin') or False
         result = user_service.register(account, username, password,
                                        check_passwd, sex, image, phone, email,
-                                       introduce, profession)
+                                       introduce, profession, is_admin)
         return response(result)
 
     @user.doc("修改信息")

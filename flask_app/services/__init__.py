@@ -25,12 +25,12 @@ def get_token_info(token):
     return res
 
 
-def validate_params(account=None, passwd=None, email=None,
+def validate_params(account=None, password=None, email=None,
                     phone=None, gender=None):
     """
     参数校验
     :param account: 账号
-    :param passwd: 密码
+    :param password: 密码
     :param email: 邮箱
     :param phone: 手机号
     :param gender: 性别
@@ -46,14 +46,14 @@ def validate_params(account=None, passwd=None, email=None,
             return MESSAGE_DICT.PARAMS_NOT_VALID.format("账号")
 
     # 校验密码规则
-    if passwd:
-        if len(passwd) < 6:  # 长度不能小于6
+    if password:
+        if len(password) < 6:  # 长度不能小于6
             return MESSAGE_DICT.PARAMS_NOT_VALID.format("密码")
-        if not any(char.isdigit() for char in passwd):  # 必须有数字
+        if not any(char.isdigit() for char in password):  # 必须有数字
             return MESSAGE_DICT.PARAMS_NOT_VALID.format("密码")
-        if not any(char.islower() for char in passwd):  # 必须有小写字母
+        if not any(char.islower() for char in password):  # 必须有小写字母
             return MESSAGE_DICT.PARAMS_NOT_VALID.format("密码")
-        if not any(char.isupper() for char in passwd):  # 必须有大写字母
+        if not any(char.isupper() for char in password):  # 必须有大写字母
             return MESSAGE_DICT.PARAMS_NOT_VALID.format("密码")
 
     # 校验邮箱规则
@@ -76,22 +76,38 @@ def validate_params(account=None, passwd=None, email=None,
     return MESSAGE_DICT.SUCCESS
 
 
-def encrypt_pass(passwd):
+def encrypt_pass(password):
     """
     密码加密
-    :param passwd:
+    :param password:
     :return:
     """
-    passwd = "".join(chr(ord(char) + 1) for char in passwd)
+    password = "".join(chr(ord(char) + 1) for char in password)
     hash_algorithm = hashlib.sha256()
-    passwd = passwd.encode('utf-8')
-    hash_algorithm.update(passwd)
+    password = password.encode('utf-8')
+    hash_algorithm.update(password)
     encrypted_passwd = hash_algorithm.hexdigest()
 
     return encrypted_passwd
 
 
-def create_token(account, username, email, phone, profession, member_level):
+def check_pass(password, check_passwd):
+
+    # 判断两次密码输入是否一致
+    if password != check_passwd:
+        return {"message": MESSAGE_DICT.CHECK_PASSWD_ERROR}
+
+    # 判断密码是否合规
+    check_param = validate_params(password=password)
+    if check_param != MESSAGE_DICT.SUCCESS:
+        return {"message": check_param}
+
+    # 密码加密
+    password = encrypt_pass(password)
+    return {'message': MESSAGE_DICT.SUCCESS, 'password': password}
+
+
+def create_token(account, username, email, phone, profession, member_level=0, is_admin=False):
     """
     :param account: 账号
     :param username: 用户名
@@ -99,7 +115,7 @@ def create_token(account, username, email, phone, profession, member_level):
     :param phone: 手机号
     :param profession: 职业
     :param member_level: 会员等级
-    :param class_id: 班级ID
+    :param is_admin: 是否为管理员
     :return:
     """
     payload = {"account": account,
@@ -107,7 +123,8 @@ def create_token(account, username, email, phone, profession, member_level):
                'email': email,
                'phone': phone,
                'profession': profession,
-               "member_level": member_level}
+               "member_level": member_level,
+               "is_admin": False}
 
     token = jwt.encode(payload, 'secret', algorithm='HS256')
     return token

@@ -3,14 +3,14 @@ import base64
 
 from flask_app.databases import user_db
 from flask_app.services import encrypt_pass, validate_params, create_token, \
-    get_token_info
+    get_token_info, check_pass
 from flask_app import MESSAGE_DICT
 
 # ------------------------------------静态配置-----------------------------------
 default_path = '/default.jpg'
 
 
-# -------------------------------------代码--------------------------------------
+# ---------------------------------接口调用方法-----------------------------------
 def login(account, password, addr):
     if not all([account, password, addr]):
         return {"message": MESSAGE_DICT.PARAMS_ERROR}
@@ -30,7 +30,7 @@ def get_user_info(token, account):
 
 
 def register(account, username, password, check_passwd, sex, image, phone, email,
-             introduce, profession):
+             introduce, profession, is_admin):
     """
     :param account:
     :param username:
@@ -42,10 +42,9 @@ def register(account, username, password, check_passwd, sex, image, phone, email
     :param phone:
     :param introduce:
     :param profession:
+    :param is_admin:
     :return:
     """
-    res = user_db.register(account, username, password, sex, image, phone, email,
-                           introduce, profession, None)
     # 判断两次密码输入是否一致
     if password != check_passwd:
         return {"message": MESSAGE_DICT.CHECK_PASSWD_ERROR}
@@ -63,55 +62,38 @@ def register(account, username, password, check_passwd, sex, image, phone, email
     password = encrypt_pass(password)
 
     # 生成token
-    token = create_token(account, username, email,
-                         phone, profession, member_level=0)
+    token = create_token(account, username, email, phone, profession, is_admin=is_admin)
 
-    res = user_db.register(account, username, password, sex, image, phone, email,
-                           introduce, profession, None)
+    res = user_db.register(account, username, password, sex, image, phone,
+                           email, introduce, profession, is_admin, token)
 
     return res
 
 
-def check_pass(passwd, check_passwd):
-
-    # 判断两次密码输入是否一致
-    if passwd != check_passwd:
-        return {"message": MESSAGE_DICT.CHECK_PASSWD_ERROR}
-
-    # 判断密码是否合规
-    check_param = validate_params(passwd=passwd)
-    if check_param != MESSAGE_DICT.SUCCESS:
-        return {"message": check_param}
-
-    # 密码加密
-    passwd = encrypt_pass(passwd)
-    return {'message': MESSAGE_DICT.SUCCESS, 'passwd': passwd}
-
-
-def modify_pass(account, user_type, old_pass, passwd, check_passwd, token):
+def modify_pass(account, old_pass, password, check_passwd, token):
     """
     :param account:
     :param old_pass:
-    :param passwd:
-    :param user_type:
+    :param password:
     :param check_passwd:
     :param token:
     :return:
     """
-    if not all([account, old_pass, passwd, check_passwd, token]):
+    if not all([account, old_pass, password, check_passwd, token]):
         return {"message": MESSAGE_DICT.PARAMS_ERROR}
     info = get_token_info(token)
-    if info.get('account') != account:
-        return {"message": MESSAGE_DICT.TOKEN_ERROR}
 
-    if info.get('user_type') not in [user_type, 'admin']:
-        return {"message": MESSAGE_DICT.NOT_AUTH.format('修改密码')}
+    if info.get('account') != account:
+        if not info.get("is_admin"):
+            return {"message": MESSAGE_DICT.NOT_AUTH.format('修改密码')}
+
     old_pass = encrypt_pass(old_pass)
-    passwd = check_pass(passwd, check_passwd)
-    if passwd.get('message') != MESSAGE_DICT.SUCCESS:
-        return passwd
-    passwd = passwd.get('passwd')
-    return user_db.modify_pass(account, old_pass, passwd, user_type)
+    password = check_pass(password, check_passwd)
+    if password.get('message') != MESSAGE_DICT.SUCCESS:
+        return password
+    password = password.get('password')
+
+    return user_db.modify_pass(account, old_pass, password)
 
 
 def modify_info(auth_account, account, username, image, email, phone, user_type,

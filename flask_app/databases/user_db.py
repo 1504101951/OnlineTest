@@ -1,9 +1,7 @@
 # -------------------------------------导包--------------------------------------
-from sqlalchemy import or_, union, select, literal_column
-
 from flask_app.databases import redis_cache
 from flask_app import MESSAGE_DICT
-from flask_app.models.user_model import User
+from flask_app.models.user_model import User, Token
 import pickle
 
 # ------------------------------------静态配置-----------------------------------
@@ -36,6 +34,7 @@ def check_duplicate(account, email, phone, username):
     else:
         return {"message": MESSAGE_DICT.SUCCESS}
 
+
 # -----------------------------------接口调用方法---------------------------------
 def login(account, password, addr):
     """
@@ -50,7 +49,7 @@ def login(account, password, addr):
         return {"message": MESSAGE_DICT.LOGIN_LIMIT}
     # 找数据库中匹配账号密码的用户
     entities = ['account', 'username', 'image', 'email', 'phone',
-                'introduce', 'profession', 'sex', 'member_level']
+                'introduce', 'profession', 'sex', 'member_level', 'is_admin']
     result = User.find_one(entities=entities, account=account, password=password, is_delete=False)
     # 找不到则视为(账号/密码)错误
     if not result:
@@ -58,16 +57,15 @@ def login(account, password, addr):
         redis_cache.inc(addr, login_limit_time)
         return {"message": MESSAGE_DICT.LOGIN_ERROR}
     # 从数据库中获取token， 存放到redis中， 并设置过期时间为7天
-    token = sql.Find("SELECT token FROM token "
-                     f"WHERE account = '{account}'", False).get("token")
+    token = Token.find_one(account=account)['token']
+
     # 如果token设置失败, 则视为登录失败, 序列化value
     if not redis_cache.set(token, pickle.dumps(result), ex_time=token_lives):
         return {"message": MESSAGE_DICT.LOGIN_ERROR}
     # redis删除登录失败次数
     redis_cache.delete(addr)
     # 成功， 返回提示信息与token
-    return {"message": MESSAGE_DICT.SUCCESS, "token": token,
-            'result': result}
+    return {"message": MESSAGE_DICT.SUCCESS, "token": token, 'result': result}
 
 
 def get_user_info(account):
@@ -76,21 +74,16 @@ def get_user_info(account):
     :param account:
     :return:
     """
-    sql = MySQLManager()
-    result = sql.Find(f"SELECT * FROM user LEFT JOIN "
-                      f"class ON class.id = user.class_id "
-                      f"WHERE is_delete = False "
-                      f"AND is_active = True "
-                      f"AND account = '{account}' ",
-                      False)
-    sql.conn.close()
+    entities = ['account', 'username', 'image', 'email', 'phone',
+                'introduce', 'profession', 'sex', 'member_level', 'is_admin']
+    result = User.find_all(account=account, entities=entities, is_delete=False)
     if not result:
-        return {"message": MESSAGE_DICT.NOT_FOUND}
+        return {"message": MESSAGE_DICT.NOT_FOUND.format("用户信息")}
     return {"message": MESSAGE_DICT.SUCCESS, 'result': result}
 
 
 def register(account, username, password, sex, image, phone, email,
-             introduce, profession, token):
+             introduce, profession, is_admin, token):
     """
     注册
     :param account: 账号
@@ -102,6 +95,7 @@ def register(account, username, password, sex, image, phone, email,
     :param phone: 手机号
     :param introduce:: 简介
     :param profession: 用户职业
+    :param is_admin: 是否为管理员
     :param token: 用户密钥
     :return:
     """
@@ -110,44 +104,36 @@ def register(account, username, password, sex, image, phone, email,
         return {"message": MESSAGE_DICT.REPEAT.format(",".join(is_exist['message']))}
 
     # 创建用户
-    create_user = User.create(account=account, username=username, password=password,
-                              sex=sex, image=image, phone=phone, email=email,
-                              introduce=introduce, profession=profession)
-
+    if User.create(account=account, username=username, password=password,
+                   sex=sex, image=image, phone=phone, email=email,
+                   introduce=introduce, profession=profession, is_admin=is_admin):
+        if Token.create(account=account, token=token):
+            return {"message": MESSAGE_DICT.SUCCESS}
     # 如果创建失败则返回报错信息
-    if not create_user:
-        return {"message": MESSAGE_DICT.OPERATION_FAIL.format("注册")}
-    # 创建成功则继续创建token
-    create_token = sql.Insert('token', account=account, token=token)
-    # 如果创建失败则返回报错信息并删除创建成功的用户
-    if not create_token:
-        sql.Exec(f"DELETE FROM user WHERE account = '{account}'")
-        sql.conn.close()
-        return {"message": MESSAGE_DICT.OPERATION_FAIL.format("注册")}
-    sql.conn.commit()
-    sql.conn.close()
-    return {"message": MESSAGE_DICT.SUCCESS}
+    return {"message": MESSAGE_DICT.OPERATION_FAIL.format("注册")}
 
 
-def modify_pass(account, old_pass, passwd, user_type):
-    sql = MySQLManager()
-    if old_pass == passwd:
-        return {"message": MESSAGE_DICT.SUCCESS}
-    is_valid = sql.Find(f"SELECT account, passwd from user "
-                        f"WHERE account = '{account}' "
-                        f"AND passwd = '{old_pass}' "
-                        f"AND user_type = '{user_type}'")
-    if not is_valid:
+def modify_pass(account, old_pass, password):
+    """
+    修改密码
+    :param account: 账号
+    :param old_pass: 旧密码
+    :param password: 新密码
+    :return:
+    """
+    # 如果旧密码与数据库密码不符，则提示旧密码错误
+    is_valid = User.find_one(account=account, password=old_pass, is_delete=False)
+    if old_pass != is_valid['password']:
         return {"message": MESSAGE_DICT.OLD_PASS_ERROR}
 
-    res = sql.Exec(f"UPDATE user SET passwd = '{passwd}' "
-                   f"WHERE account = '{account}' "
-                   f"AND user_type = '{user_type}'")
-    sql.conn.commit()
-    sql.conn.close()
-    if not res:
-        return {"message": MESSAGE_DICT.OPERATION_FAIL.format('修改密码')}
-    return {'message': MESSAGE_DICT.SUCCESS}
+    # 如果新密码与旧密码相同，直接返回成功
+    if old_pass == password:
+        return {"message": MESSAGE_DICT.SUCCESS}
+
+    if User.update_by_id(is_valid['id'], {"password": password}):
+        return {'message': MESSAGE_DICT.SUCCESS}
+
+    return {"message": MESSAGE_DICT.OPERATION_FAIL.format('修改密码')}
 
 
 def modify_info(account, username, image, email, phone,
@@ -244,4 +230,4 @@ def count_message(account, user_type):
 
 
 if __name__ == '__main__':
-    register(None, None, None, None, None, None, None, None, None)
+    pass

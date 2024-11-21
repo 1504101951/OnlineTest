@@ -33,6 +33,19 @@ class BaseModel(object):
             db.session.close()
         return ret
 
+    def update_data(self, data):
+        for k in data:
+            if k != 'id':
+                setattr(self, k, data[k])
+        db.session.add(self)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise DataBaseCommitError(400, f'数据库提交错误，{str(e)}')
+        finally:
+            db.session.close()
+
     def delete(self):
         db.session.delete(self)
         try:
@@ -49,19 +62,16 @@ class BaseModel(object):
             entities = [cls]
             sort = None
             is_one = False
-            if kwargs.get("entities"):
-                # 是否返回指定列
-                entities = kwargs.pop('entities')
-            if kwargs.get("sort"):
-                # 是否排序
-                sort = kwargs.pop('sort')
-            if kwargs.get('is_one'):
-                # 是否查询匹配条件的第一个元素
-                is_one = kwargs.pop('is_one')
-            res = cls.query.with_entities(*entities).filter(*args).filter_by(
-                **kwargs)
+            for key, value in kwargs.copy().items():
+                match key:
+                    case 'sort':
+                        sort = kwargs.pop('sort')
+                    case 'entities':
+                        entities = [getattr(cls, col) for col in kwargs.pop('entities')]
+                    case 'is_one':
+                        is_one = kwargs.pop('is_one')
+            res = cls.query.with_entities(*entities).filter(*args).filter_by(**kwargs)
             sequence_map = {1: asc, -1: desc}
-
             if sort:
                 sort = [sequence_map[int(sequence)](cls.__dict__.get(sort_key))
                         for sort_key, sequence in sort.items()]
@@ -87,8 +97,12 @@ class BaseModel(object):
         :param kwargs:
         :return:
         """
-        res = cls._find(is_one=True, *args, **kwargs)
-        return res.to_dict() if res else {}
+        result = cls._find(is_one=True, *args, **kwargs)
+        try:
+            result = result.to_dict() if result else {}
+        except:
+            result = result._asdict() if result else {}
+        return result
 
     @classmethod
     def update_by_id(cls, id_, update_json, sort=None):
@@ -102,13 +116,18 @@ class BaseModel(object):
         res = cls._find(id=id_, sort=sort, is_one=True)
         if res:
             res.update_data(update_json)
-            return res.to_dict()
+            return res
 
     @classmethod
-    def find_all(cls, entities=None, sort=None, *args, **kwargs):
-        translate = kwargs.pop('translate', True)
-        res = cls._find(entities=entities, sort=sort, *args, **kwargs)
-        return [i.to_dict() for i in res] if translate else res
+    def find_all(cls, *args, **kwargs):
+        result = cls._find(*args, **kwargs)
+        data = []
+        for i in result:
+            try:
+                data.append(i.to_dict())
+            except:
+                data.append(i._asdict())
+        return data
 
     # @classmethod
     # def get_data_by_filters(cls, _filters, _query=None):
@@ -181,7 +200,6 @@ class BaseModel(object):
 
     def to_dict(self):
         # 读一下id属性，从而确保所有属性正确读入(载入)
-        _id = self.id
         data_properties = {k: v for k, v in list(self.__dict__.items()) if
                            k not in self.__undict__ and not isinstance(
                                v, sqlalchemy.orm.state.InstanceState
