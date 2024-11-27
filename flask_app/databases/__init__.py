@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 engine = create_engine(current_config.SQLALCHEMY_DATABASE_URI)
 app.config.from_object(current_config)
 
+
 # -------------------------------------redis--------------------------------------
 class RedisManager(object):
     _redis_conn = rd

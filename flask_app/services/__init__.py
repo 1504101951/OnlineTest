@@ -21,7 +21,7 @@ def time_format(str_time):
 
 def get_token_info(token):
     from flask_app.databases import redis_cache
-    res = redis_cache.get(token)
+    res = redis_cache.get(f"token:{token}")
     return res
 
 
@@ -107,13 +107,16 @@ def check_pass(password, check_passwd):
     return {'message': MESSAGE_DICT.SUCCESS, 'password': password}
 
 
-def create_token(account, username, email, phone, profession, member_level=0, is_admin=False):
+def create_token(account, username, email, phone, introduce, profession, image,
+                 member_level=0, is_admin=False):
     """
     :param account: 账号
     :param username: 用户名
     :param email: 邮箱
     :param phone: 手机号
     :param profession: 职业
+    :param introduce: 自我介绍
+    :param image: 头像
     :param member_level: 会员等级
     :param is_admin: 是否为管理员
     :return:
@@ -122,9 +125,11 @@ def create_token(account, username, email, phone, profession, member_level=0, is
                'username': username,
                'email': email,
                'phone': phone,
+               "image": image,
                'profession': profession,
+               "introduce": introduce,
                "member_level": member_level,
-               "is_admin": False}
+               "is_admin": is_admin}
 
     token = jwt.encode(payload, 'secret', algorithm='HS256')
     return token
@@ -148,15 +153,6 @@ def page_limit_skip(page=None, limit=None):
 
 
 # ----------------------------------上传图片处理----------------------------------
-def save_path(module_name):
-    path = f'{BASE_DIR}{module_name}/'
-    # 确保目标目录存在，如果不存在则创建
-    if not os.path.exists(path):
-        os.makedirs(path)
-    after = f"{uuid.uuid4().hex[:10]}.jpg"
-    return f'{module_name}/{after}'
-
-
 def save_file(module_name, file):
     """
     生成唯一的文件名并保存文件
@@ -165,10 +161,15 @@ def save_file(module_name, file):
     """
     # 获取文件后缀
     # 生成唯一的文件名
-    after_path = save_path(module_name)
-    # 保存文件
-    compress_and_resize_image(file, 200, 200, after_path)
-    return after_path
+    after = f"{uuid.uuid4().hex[:10]}.jpg"
+    path = f'{BASE_DIR}{module_name}'
+    # 确保目标目录存在，如果不存在则创建
+    if not os.path.exists(path):
+        os.makedirs(path)
+    if compress_and_resize_image(file, 200, 200, f"{path}/{after}"):
+        # 保存文件
+        return {"image": after, "message": MESSAGE_DICT.SUCCESS}
+    return {"image": None, "message": MESSAGE_DICT.OPERATION_FAIL.format("上传")}
 
 
 def compress_and_resize_image(image, width, height, after_path, quality=100,
@@ -182,9 +183,13 @@ def compress_and_resize_image(image, width, height, after_path, quality=100,
     :param quality: 质量
     :param format_: 类型
     """
-    with Image.open(image) as img:
-        img_resized = img.resize((width, height), Image.Resampling.LANCZOS)
-        img_resized.save(after_path, format=format_, quality=quality)
+    try:
+        with Image.open(image) as img:
+            img_resized = img.resize((width, height), Image.Resampling.LANCZOS)
+            img_resized.save(after_path, format=format_, quality=quality)
+            return True
+    except:
+        return False
 
 
 def remove_file(path):

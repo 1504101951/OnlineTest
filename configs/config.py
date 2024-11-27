@@ -8,7 +8,7 @@ import yaml
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 config_file = os.path.join(root_path, "config.yaml")
 env_config = yaml.load(open(config_file, encoding='utf-8'), Loader=yaml.SafeLoader)
-BASE_DIR = f"{root_path}/front/vue-project/src/assets/img/"
+BASE_DIR = f"{root_path}/front/vue-project/src/assets/"
 
 
 # ------------------------------------class-------------------------------------

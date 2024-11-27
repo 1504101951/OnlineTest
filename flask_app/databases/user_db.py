@@ -13,21 +13,50 @@ login_limit_time = 60 * 15
 def check_duplicate(account, email, phone, username):
     errors = []
     # 检查账号是否重复
-    if User.find_one(account=account):
+    if User.find_one(account=account, is_delete=False):
         errors.append("账号已存在")
 
     # 检查邮箱是否重复
-    if User.find_one(email=email):
+    if User.find_one(email=email, is_delete=False):
         errors.append("邮箱已注册")
 
     # 检查手机号是否重复
-    if User.find_one(phone=phone):
+    if User.find_one(phone=phone, is_delete=False):
         errors.append("手机号已注册")
 
     # 检查用户名是否重复
-    if User.find_one(username=username):
+    if User.find_one(username=username, is_delete=False):
         errors.append("用户名已存在")
 
+    # 根据检测结果返回
+    if errors:
+        return {"message": errors}
+    else:
+        return {"message": MESSAGE_DICT.SUCCESS}
+
+
+def check_modify_duplicate(account, email, phone, username):
+    """
+    检查用户新修改的信息是否有重复
+    :param account:
+    :param email:
+    :param phone:
+    :param username:
+    :return:
+    """
+    errors = []
+    filter_query = [User.account != account]
+    # 检查邮箱是否重复
+    if User.find_one(*filter_query, email=email, is_delete=False):
+        errors.append("邮箱已注册")
+
+    # 检查手机号是否重复
+    if User.find_one(*filter_query, phone=phone, is_delete=False):
+        errors.append("手机号已注册")
+
+    # 检查用户名是否重复
+    if User.find_one(*filter_query, username=username, is_delete=False):
+        errors.append("用户名已存在")
     # 根据检测结果返回
     if errors:
         return {"message": errors}
@@ -45,7 +74,7 @@ def login(account, password, addr):
     :return:
     """
     # 如果在15分钟内连续五次登录失败则禁止登录
-    if redis_cache.get(addr) not in [None, '1', '2', '3', '4', '5']:
+    if redis_cache.get(f"addr:{addr}") not in [None, '1', '2', '3', '4', '5']:
         return {"message": MESSAGE_DICT.LOGIN_LIMIT}
     # 找数据库中匹配账号密码的用户
     entities = ['account', 'username', 'image', 'email', 'phone',
@@ -54,16 +83,16 @@ def login(account, password, addr):
     # 找不到则视为(账号/密码)错误
     if not result:
         # 在redis中自增1， 防止同一个IP短时间内登录次数过多
-        redis_cache.inc(addr, login_limit_time)
+        redis_cache.inc(f"addr:{addr}", login_limit_time)
         return {"message": MESSAGE_DICT.LOGIN_ERROR}
     # 从数据库中获取token， 存放到redis中， 并设置过期时间为7天
     token = Token.find_one(account=account)['token']
 
     # 如果token设置失败, 则视为登录失败, 序列化value
-    if not redis_cache.set(token, pickle.dumps(result), ex_time=token_lives):
+    if not redis_cache.set(f"token:{token}", pickle.dumps(result), ex_time=token_lives):
         return {"message": MESSAGE_DICT.LOGIN_ERROR}
     # redis删除登录失败次数
-    redis_cache.delete(addr)
+    redis_cache.delete(f"addr:{addr}")
     # 成功， 返回提示信息与token
     return {"message": MESSAGE_DICT.SUCCESS, "token": token, 'result': result}
 
@@ -113,12 +142,13 @@ def register(account, username, password, sex, image, phone, email,
     return {"message": MESSAGE_DICT.OPERATION_FAIL.format("注册")}
 
 
-def modify_pass(account, old_pass, password):
+def modify_pass(account, old_pass, password, token):
     """
     修改密码
     :param account: 账号
     :param old_pass: 旧密码
     :param password: 新密码
+    :param token: 用户密钥
     :return:
     """
     # 如果旧密码与数据库密码不符，则提示旧密码错误
@@ -130,14 +160,15 @@ def modify_pass(account, old_pass, password):
     if old_pass == password:
         return {"message": MESSAGE_DICT.SUCCESS}
 
-    if User.update_by_id(is_valid['id'], {"password": password}):
+    if User.update(account=account, update_json={"password": password}):
+        redis_cache.delete(f"token:{token}")
         return {'message': MESSAGE_DICT.SUCCESS}
 
     return {"message": MESSAGE_DICT.OPERATION_FAIL.format('修改密码')}
 
 
-def modify_info(account, username, image, email, phone,
-                user_type, introduce, class_id, new_token):
+def modify_info(account, username, email, phone, introduce, profession, image,
+                member_level, new_token):
     """
     修改账号信息
     :param account:
@@ -145,88 +176,53 @@ def modify_info(account, username, image, email, phone,
     :param image:
     :param email:
     :param phone:
-    :param user_type:
+    :param profession:
     :param introduce:
-    :param class_id:
+    :param member_level:
     :param new_token:
     :return:
     """
-    sql = MySQLManager()
     # 判断用户名是否重复
-    find_repeat = sql.Find(f"SELECT '用户名' AS type FROM "
-                           f"user WHERE username = '{username}' "
-                           f"AND account <> '{account}' "
-                           f"UNION "
-                           f"SELECT '手机号' AS type FROM "
-                           f"user WHERE phone = '{phone}' "
-                           f"AND account <> '{account}' "
-                           f"UNION "
-                           f"SELECT '邮箱' AS type FROM "
-                           f"user WHERE email = '{email}' "
-                           f"AND account <> '{account}' ")
-    if find_repeat:
-        message = ",".join(find_repeat.values())
-        return {"message": MESSAGE_DICT.REPEAT.format(message)}
-    if class_id:
-        find_str = f"AND class_id = {class_id}"
-        update_str = f", class_id = '{class_id}' "
-    else:
-        find_str = ''
-        update_str = ''
-    is_update = sql.Find(f"SELECT * FROM user WHERE account = '{account}' "
-                         f"AND image = '{image}' "
-                         f"AND email = '{email}' "
-                         f"AND phone = '{phone}' "
-                         f"AND user_type = '{user_type}' "
-                         f"AND introduce = '{introduce}' "
-                         f"{find_str}", False)
-    if is_update:
-        return {"message": MESSAGE_DICT.SUCCESS}
-    update_str = f"UPDATE user SET username = '{username}', " \
-                 f"image = '{image}', " \
-                 f"email = '{email}', " \
-                 f"phone = '{phone}', " \
-                 f"user_type = '{user_type}', " \
-                 f"introduce = '{introduce}', " \
-                 f"token = '{new_token}' {update_str}"
-    update_str += f"WHERE account = '{account}'"
-    res = sql.Exec(update_str)
-    sql.conn.commit()
-    sql.conn.close()
+    is_exist = check_modify_duplicate(account, email, phone, username)
+    if is_exist['message'] != MESSAGE_DICT.SUCCESS:
+        return {"message": MESSAGE_DICT.REPEAT.format(",".join(is_exist['message']))}
+
+    update_json = {"username": username, "email": email, "phone": phone,
+                   "image": image, "introduce": introduce,
+                   "profession": profession, "member_level": member_level}
+    old_info = User.find_one(account=account, is_delete=False)
+    if not old_info:
+        return {"message": MESSAGE_DICT.NOT_FOUND.format("用户信息")}
+
     # 用户信息修改完成后，token也会随之更新，需要重新登录。
-    if not res:
-        return {'message': MESSAGE_DICT.OPERATION_FAIL.format('修改用户信息')}
-    return {"message": MESSAGE_DICT.SUCCESS}
+    if User.update(account=account, update_json=update_json):
+        if Token.update(account=account, token=new_token):
+            redis_cache.delete(f"token:{new_token}")
+            return {"message": MESSAGE_DICT.SUCCESS}
+
+    return {'message': MESSAGE_DICT.OPERATION_FAIL.format('修改用户信息')}
 
 
-def get_image(username):
-    sql = MySQLManager()
-    image = sql.Find(f"SELECT image from user WHERE username = '{username}'",
-                     False)
-    sql.conn.close()
-    if not image:
-        return {'message': MESSAGE_DICT.NOT_FOUND.format("用户头像")}
-    return {"message": MESSAGE_DICT.SUCCESS, "result": image}
 
 
-def count_message(account, user_type):
-    sql = MySQLManager()
-    if user_type == 'student':
-        status = (1, 4, 5)
-        total = sql.Find(f"SELECT COUNT(*) AS total FROM session "
-                         f"WHERE student = '{account}' "
-                         f"AND status IN {status} "
-                         f"AND is_read = 0", False).get('total') or 0
-        sql.conn.close()
-        return {"message": MESSAGE_DICT.SUCCESS, 'total': total}
-    elif user_type == 'company':
-        status = (0, 2, 3, 6, 7, 8)
-        total = sql.Find(f"SELECT COUNT(*) AS total FROM session "
-                         f"WHERE company_id = '{account}' "
-                         f"AND status IN {status} "
-                         f"AND is_read = 0", False).get('total') or 0
-        sql.conn.close()
-        return {"message": MESSAGE_DICT.SUCCESS, 'total': total}
+# def count_message(account, user_type):
+#     sql = MySQLManager()
+#     if user_type == 'student':
+#         status = (1, 4, 5)
+#         total = sql.Find(f"SELECT COUNT(*) AS total FROM session "
+#                          f"WHERE student = '{account}' "
+#                          f"AND status IN {status} "
+#                          f"AND is_read = 0", False).get('total') or 0
+#         sql.conn.close()
+#         return {"message": MESSAGE_DICT.SUCCESS, 'total': total}
+#     elif user_type == 'company':
+#         status = (0, 2, 3, 6, 7, 8)
+#         total = sql.Find(f"SELECT COUNT(*) AS total FROM session "
+#                          f"WHERE company_id = '{account}' "
+#                          f"AND status IN {status} "
+#                          f"AND is_read = 0", False).get('total') or 0
+#         sql.conn.close()
+#         return {"message": MESSAGE_DICT.SUCCESS, 'total': total}
 
 
 if __name__ == '__main__':

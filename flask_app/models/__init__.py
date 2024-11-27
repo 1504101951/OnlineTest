@@ -105,15 +105,18 @@ class BaseModel(object):
         return result
 
     @classmethod
-    def update_by_id(cls, id_, update_json, sort=None):
+    def update(cls, *args, **kwargs):
         """
         通过id更新信息
-        :param id_:
-        :param update_json:
-        :param sort:
+        :param args:
+        :param kwargs:
         :return:
         """
-        res = cls._find(id=id_, sort=sort, is_one=True)
+        try:
+            update_json = kwargs.pop('update_json')
+        except:
+            raise ValueError('update_json is required.')
+        res = cls._find(is_one=True, *args, *kwargs)
         if res:
             res.update_data(update_json)
             return res

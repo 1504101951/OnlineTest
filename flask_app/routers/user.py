@@ -76,19 +76,17 @@ class Account(Resource):
     def put(self):
         data = request.get_json()
         token = request.headers.get('Authorization')
-        auth_account = data.get("auth_account")
         account = data.get('account')
         username = data.get('username')
-        image = data.get("image")
         email = data.get('email')
         phone = data.get('phone')
-        user_type = data.get('user_type')
+        image = request.files.get('file') or '/assets/img/default.jpg'
+        profession = data.get('profession')
         introduce = data.get('introduce')
-        class_id = data.get('class_id')
-        result = user_service.modify_info(auth_account, account, username,
-                                          image, email,
-                                          phone, user_type, introduce,
-                                          class_id, token)
+        member_level = data.get('member_level') or None
+        is_admin = data.get("is_admin") or False
+        result = user_service.modify_info(account, username, email, phone, image,
+                                          profession, introduce, member_level, is_admin, token)
         return response(result)
 
 
