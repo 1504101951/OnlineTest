@@ -7,6 +7,8 @@ from flask_app.databases import db
 from configs.application import app
 from flask_app.models import user_model
 from flask_app.routers.user import user
+from flask_app.script import *
+from apscheduler.schedulers.background import BackgroundScheduler
 cache = Cache()
 
 
@@ -46,4 +48,6 @@ def create_app(app):
     return app
 
 
+scheduler = BackgroundScheduler()
+scheduler.add_job(clean_temp_file, 'interval', minutes=30)
 app = create_app(app)
