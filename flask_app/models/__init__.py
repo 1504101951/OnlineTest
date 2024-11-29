@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import time
+import traceback
 
 import sqlalchemy
 import logging
@@ -82,7 +83,7 @@ class BaseModel(object):
             else:
                 res = res.all()
         except Exception as e:
-            logging.warning(f'sql find one error: {e}')
+            logging.error(traceback.format_exc())
             db.session.rollback()
         finally:
             db.session.close()
@@ -116,7 +117,7 @@ class BaseModel(object):
             update_json = kwargs.pop('update_json')
         except:
             raise ValueError('update_json is required.')
-        res = cls._find(is_one=True, *args, *kwargs)
+        res = cls._find(is_one=True, *args, **kwargs)
         if res:
             res.update_data(update_json)
             return res

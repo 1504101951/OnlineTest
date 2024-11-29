@@ -1,13 +1,14 @@
 # -------------------------------------导包--------------------------------------
 import base64
+import logging
 
 from flask_app.databases import user_db
 from flask_app.services import encrypt_pass, validate_params, create_token, \
-    get_token_info, check_pass, save_file, remove_file
+    get_token_info, check_pass, save_file, remove_file, move_file
 from flask_app import MESSAGE_DICT
 
 # ------------------------------------静态配置-----------------------------------
-default_path = '/default.jpg'
+default_path = 'imgs/default/default.jpg'
 
 
 # ---------------------------------接口调用方法-----------------------------------
@@ -50,13 +51,20 @@ def register(account, username, password, check_passwd, sex, image, phone,
         return {"message": MESSAGE_DICT.CHECK_PASSWD_ERROR}
 
     # 判断所有参数是否都传入
-    if not all([account, username, password, check_passwd, image, phone, email,
-                introduce, profession]):
+    if not all([account, username, password, check_passwd, str(sex), image, phone, email, profession]):
         return {"message": MESSAGE_DICT.PARAMS_ERROR}
     # 校验每个参数是否合规
     check_params = validate_params(account, password, email, phone)
     if check_params != MESSAGE_DICT.SUCCESS:
         return {"message": check_params}
+
+    if 'temp' in image:
+        # 将图片从临时路径移动到正式路径
+        image = move_file(image, image.replace("temp", 'imgs'))
+        if 'message' in image:
+            return image
+    else:
+        image = default_path
 
     # 加密密码
     password = encrypt_pass(password)
@@ -111,7 +119,7 @@ def modify_info(account, username, email, phone, image, profession,
     :return:
     """
     # 判断是否全部传入参数
-    if not all([account, username, image, email, phone, token]):
+    if not all([account, username, email, phone, image, profession, token]):
         return {"message": MESSAGE_DICT.PARAMS_ERROR}
 
     # 判断token和前端传的account是否一致
@@ -135,12 +143,28 @@ def modify_info(account, username, email, phone, image, profession,
     if check_param != MESSAGE_DICT.SUCCESS:
         return {"message": check_param}
 
+    member_level = member_level or info.get('member_level')
+    if 'temp' in image:
+        # 将图片从临时路径移动到正式路径
+        image = move_file(image, image.replace("temp", 'imgs'))
+        if 'message' in image:
+            return image
+
     # 通过修改后的用户信息获取新的token
     new_token = create_token(account, username, email, phone, introduce,
                              profession, image, member_level, is_admin)
 
     res = user_db.modify_info(account, username, email, phone, introduce,
                               profession, image, member_level, new_token)
+
+    if 'message' in res and res.get('message') == MESSAGE_DICT.SUCCESS:
+        if info['image'] != image:
+            # 删除原来的图片
+            try:
+                remove_file(info['image'])
+            except:
+                logging.error("图片删除失败")
+
     return res
 
 
@@ -149,7 +173,7 @@ def get_image(username, token):
     if not user:
         return {"message": MESSAGE_DICT.TOKEN_ERROR}
     if user.get("account") == username:
-        return user_db.get_image(username)
+        return user['image']
 
 
 def upload_image(image):

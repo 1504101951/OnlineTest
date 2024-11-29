@@ -61,7 +61,7 @@ class Account(Resource):
         password = data.get('password')
         check_passwd = data.get('check_passwd')
         sex = data.get("sex")
-        image = data.get("image") or '@/assets/img/default.jpg'
+        image = data.get("image") or 'imgs/default.jpg'
         email = data.get('email')
         phone = data.get('phone')
         introduce = data.get('introduce') or 'Ta的自我介绍正在路上...'
@@ -80,7 +80,7 @@ class Account(Resource):
         username = data.get('username')
         email = data.get('email')
         phone = data.get('phone')
-        image = request.files.get('file') or '/assets/img/default.jpg'
+        image = data.get("image") or '/assets/img/default.jpg'
         profession = data.get('profession')
         introduce = data.get('introduce')
         member_level = data.get('member_level') or None

@@ -196,7 +196,7 @@ def modify_info(account, username, email, phone, introduce, profession, image,
 
     # 用户信息修改完成后，token也会随之更新，需要重新登录。
     if User.update(account=account, update_json=update_json):
-        if Token.update(account=account, token=new_token):
+        if Token.update(account=account, update_json={"token": new_token}):
             redis_cache.delete(f"token:{new_token}")
             return {"message": MESSAGE_DICT.SUCCESS}
 
