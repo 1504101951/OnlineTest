@@ -91,7 +91,7 @@
                                  class="avatar"
                                  style="width: 180px; height: 235px; padding: 0;margin: 0">
                             <img v-else
-                                 :src="require('@/assets/imgs/default.jpg')"
+                                 :src="require('@/assets/imgs/default/default.jpg')"
                                  class="avatar"
                                  style="width: 180px; height: 235px; padding: 0;margin: 0">
                         </el-upload>
@@ -412,10 +412,7 @@ export default {
     handleAvatarSuccess(res) {
       this.form.image = res.image
     },
-    formatDate(date)
-    {
-      return date.format("YYYY-MM-DD HH:mm:ss")
-    },
+    
     SubmitResume(formName) {
       this.$refs[formName].validate((valid) => {
         if (valid) {

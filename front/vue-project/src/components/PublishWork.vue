@@ -87,7 +87,7 @@
                                  class="avatar"
                                  style="width: 500px; height: 150px">
                             <img v-else
-                                 :src="require('@/assets/imgs/default.jpg')"
+                                 :src="require('@/assets/imgs/default/default.jpg')"
                                  class="avatar"
                                  style="width: 500px; height: 150px">
                         </el-upload>
@@ -101,7 +101,7 @@
                                  class="avatar"
                                  style="width: 500px; height: 150px">
                             <img v-else
-                                 :src="require('@/assets/imgs/default.jpg')"
+                                 :src="require('@/assets/imgs/default/default.jpg')"
                                  class="avatar"
                                  style="width: 500px; height: 150px">
                       </span>

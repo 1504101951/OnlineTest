@@ -44,7 +44,7 @@
                  class="avatar"
                  style="width: 640px; height: 360px; padding: 0;margin: 0">
             <img v-else
-                 :src="require('@/assets/imgs/default.jpg')"
+                 :src="require('@/assets/imgs/default/default.jpg')"
                  class="avatar"
                  style="width: 180px; height: 235px; padding: 0;margin: 0">
           </el-upload>
@@ -54,7 +54,7 @@
                              class="avatar"
                              style="width: 640px; height: 360px; padding: 0;margin: 0">
             <img v-else
-                 :src="require('@/assets/imgs/default.jpg')"
+                 :src="require('@/assets/imgs/default/default.jpg')"
                  class="avatar"
                  style="width: 180px; height: 235px; padding: 0;margin: 0">
           </span>

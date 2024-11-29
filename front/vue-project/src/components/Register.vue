@@ -80,7 +80,7 @@ export default {
   data() {
     return {
       form: {
-        image: "img/default.jpg",
+        image: "imgs/default/default.jpg",
         el_item: [
           {
             account: "",
@@ -184,14 +184,13 @@ export default {
             ],
           },
         ],
-        user_type: "student",
         isRemember: false,
       },
     };
   },
   methods: {
     handleAvatarSuccess(res) {
-      this.form.image = res.image;
+      this.form.image = "temp/" + res.image;
     },
     register(formName) {
       this.$refs[formName].validate((valid) => {

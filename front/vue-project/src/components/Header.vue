@@ -28,7 +28,7 @@
             <el-sub-menu :key="user.name" :index="user.name">
               <template #title>
                 <img v-if="image=='default.jpg'"
-                     :src="require('@/assets/img/' + image)" width="20"
+                     :src="require('@/assets/imgs/' + image)" width="20"
                      height="20"
                      style="padding-right: 10px;"/>
                 <img v-else :src="image" width="20" height="20"
@@ -37,14 +37,14 @@
               </template>
               <el-menu-item v-for="child in user.children" :key="child.name"
                             :index="child.name" @click="clickMenu(child)">
-                <img :src="require('@/assets/img/' + child.icon)" width="20"
+                <img :src="require('@/assets/imgs/' + child.icon)" width="20"
                      height="20" style="padding-right: 10px;"/>
                 {{ child.label }}
               </el-menu-item>
               <el-menu-item key="message" index="message"
                             @click="clickMenu({name: message_url[user_type]})"
                             style="display: flex; flex-direction: row">
-                <img :src="require('@/assets/img/message.png')" width="20"
+                <img :src="require('@/assets/imgs/default/message.png')" width="20"
                      height="20" style="padding-right: 10px;"/>
                 消息
                 <el-badge :value="messages" v-if="messages"
@@ -52,7 +52,7 @@
                 </el-badge>
               </el-menu-item>
               <el-menu-item key="logout" index="logout" @click="logout">
-                <img :src="require('@/assets/img/logout.png')" width="20"
+                <img :src="require('@/assets/imgs/default/logout.png')" width="20"
                      height="20" style="padding-right: 10px;"/>
                 退出登录
               </el-menu-item>
