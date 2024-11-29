@@ -1,4 +1,6 @@
 # -------------------------------------导包--------------------------------------
+import logging
+import traceback
 from datetime import datetime
 
 from PIL import Image, ImageSequence
@@ -201,4 +203,12 @@ def remove_file(path):
     except:
         raise Exception('删除文件失败')
 
+
+def move_file(old_path, new_path):
+    try:
+        os.rename(f"{BASE_DIR}{old_path}", f"{BASE_DIR}{new_path}")
+        return new_path
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return {"message": MESSAGE_DICT.FILE_UPLOAD_ERROR}
 
